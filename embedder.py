@@ -19,3 +19,4 @@ def embed(texts: List[str]) -> List[List[float]]:
 
 def embed_one(text: str) -> List[float]:
     return embed([text])[0]
+
