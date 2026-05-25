@@ -1,11 +1,18 @@
+# 클로드 라이브러리
 import anthropic
+import os
+from dotenv import load_dotenv
 from setup_db import setup_db, setup_tables, reset_table
 from indexer import index_file, list_indexed_docs
 from retriever import retrieve, compare_methods
 
+# API 키 관리
+load_dotenv()
+API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
 def generate_answer(query: str, context: str, api_key: str) -> str:
     client = anthropic.Anthropic(api_key=api_key)
-
+    # 할루시네이션 방지용
     prompt = f"""다음 컨텍스트를 참고해서 질문에 답해주세요.
 컨텍스트에 없는 내용은 모른다고 하세요.
 
@@ -15,7 +22,7 @@ def generate_answer(query: str, context: str, api_key: str) -> str:
 질문: {query}
 """
     response = client.messages.create(
-        medel="claude-opus-4-5",
+        model="claude-opus-4-5",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -54,20 +61,22 @@ if __name__ == "__main__":
     setup_db()
     setup_tables()
 
-    # API 키 (있으면 입력, 없으면 None)
-    API_KEY = None # "sk-ant-..." 키 받으면 여기 입력
 
     # 샘플 문서 인덱승 (4가지 방법)
     FILE = "sample_docs/sample.txt"
     reset_table()
-    index_file(FILE, method="fixed", chunk_size=200)
-    index_file(FILE, method="overlap", chunks_size=200, overlap=50)
+    # 같은 문서를 3가지 방식 다른 사이즈로 인덱싱
+    # 나중에 compare_methods()로 어떤 방법이 더 좋은지 비교
+    index_file(FILE, method="fixed", chunk_size=100) # 작은 사이즈
+    index_file(FILE, method="fixed", chunk_size=300) # 큰 사이즈
+    index_file(FILE, method="overlap", chunk_size=200, overlap=50)
+    index_file(FILE, method="overlap", chunk_size=200, overlap=100) # overlap
     index_file(FILE, method="section")
 
     list_indexed_docs()
 
     # 질문 테스트
-    ask("PAG란 무엇일까요?", api_key=API_KEY)
+    ask("RAG란 무엇일까요?", api_key=API_KEY)
 
     print("\n=== 청킹 방법 비교 ===")
     results = compare_methods("딥러닝이란 무엇인가?")
