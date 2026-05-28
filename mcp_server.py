@@ -7,6 +7,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 from retriever import retrieve, compare_methods
 from indexer import index_file, list_indexed_docs
+from hybrid_retriever import hybrid_search
+from reranker import rerank
 # 외부 tool 연결
 from datetime import datetime
 from duckduckgo_search import DDGS
@@ -70,6 +72,25 @@ async def list_tools() -> list[Tool]:
                     "query": {
                         "type": "string",
                         "description": "검색할 내용"
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        Tool(
+            name="advanced_search",
+            description="하이브리드 검색(벡터+BM25)과 리랭킹을 사용해 고품질 검색 결과를 반환합니다",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "검색할 질문"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "최종 반환할 청크 수 (기본값 3)",
+                        "default": 3
                     }
                 },
                 "required": ["query"]
@@ -140,6 +161,23 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 results.append(f"제목: {r['title']}\n내용: {r['body']}\n링크: {r['href']}")
         
         text = f"검색어: {query}\n\n" + "\n\n".join(results)
+        return [TextContent(type="text", text=text)]
+
+    elif name == "advanced_search":
+        query = arguments["query"]
+        top_k = arguments.get("top_k", 3)
+
+        candidates = hybrid_search(query, top_k=top_k * 3)
+        final_chunks = rerank(query, candidates, top_k=top_k)
+
+        if not final_chunks:
+            text = "검색 결과가 없습니다."
+        else:
+            text = f"질문: {query}\n\n"
+            for r in final_chunks:
+                text += f"#{r['rank']} | rerank={r['rerank_score']:.4f}\n"
+                text += f"{r['text']}\n\n"
+
         return [TextContent(type="text", text=text)]
 
     elif name == "calculate":
